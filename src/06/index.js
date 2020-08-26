@@ -1,6 +1,6 @@
 import { createMachine, assign, interpret } from 'xstate';
 
-const elBox = document.querySelector('#box');
+const elBox = document.getElementById('box');
 const elBody = document.body;
 
 const assignPoint = assign({
@@ -35,6 +35,13 @@ const resetPosition = assign({
   dy: 0,
   px: 0,
   py: 0,
+  drags: (context, event) => context.drags - 1,
+});
+
+const canDrag = (context) => context.drags < 5;
+
+const trackDrags = assign({
+  drags: (context, event) => context.drags + 1
 });
 
 const machine = createMachine({
@@ -54,8 +61,8 @@ const machine = createMachine({
         mousedown: {
           // Don't select this transition unless
           // there are < 5 drags
-          // ...
-          actions: assignPoint,
+          cond: 'canDrag',
+          actions: 'assignPoint',
           target: 'dragging',
         },
       },
@@ -63,22 +70,33 @@ const machine = createMachine({
     dragging: {
       // Whenever we enter this state, we want to
       // increment the drags count.
-      // ...
+      entry: 'trackDrags',
       on: {
         mousemove: {
-          actions: assignDelta,
+          actions: 'assignDelta',
         },
         mouseup: {
-          actions: [assignPosition],
+          actions: ['assignPosition'],
           target: 'idle',
         },
         'keyup.escape': {
           target: 'idle',
-          actions: resetPosition,
+          actions: 'resetPosition',
         },
       },
     },
   },
+}, {
+  actions: {
+    assignDelta,
+    assignPoint,
+    assignPosition,
+    resetPosition,
+    trackDrags,
+  },
+  guards: {
+    canDrag,
+  }
 });
 
 const service = interpret(machine);
