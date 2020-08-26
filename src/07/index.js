@@ -1,8 +1,8 @@
 import { createMachine, assign, interpret } from 'xstate';
 
-const elBox = document.querySelector('#box');
+const elBox = document.getElementById('box');
 const elBody = document.body;
-const elButton = document.querySelector('#button');
+const elButton = document.getElementById('button');
 
 const assignPoint = assign({
   px: (context, event) => event.clientX,
@@ -38,49 +38,77 @@ const resetPosition = assign({
   py: 0,
 });
 
-const dragDropMachine = createMachine({
-  // The initial state should check auth status instead.
-  initial: 'idle',
-  context: {
-    x: 0,
-    y: 0,
-    dx: 0,
-    dy: 0,
-    px: 0,
-    py: 0,
-    user: undefined,
-  },
-  states: {
-    // Add two states:
-    // - checkingAuth (with transient transitions)
-    // - unauthorized
-    idle: {
-      on: {
-        mousedown: {
-          actions: assignPoint,
-          target: 'dragging',
-        },
-      },
-    },
-    dragging: {
-      on: {
-        mousemove: {
-          actions: assignDelta,
-        },
-        mouseup: {
-          actions: [assignPosition],
-          target: 'idle',
-        },
-        'keyup.escape': {
-          target: 'idle',
-          actions: resetPosition,
-        },
-      },
-    },
-  },
+const isAuthorized = (context) => !!context.user;
+
+const signIn = assign({
+  user: (context, event) => event.user
 });
 
-const service = interpret(dragDropMachine);
+const createDragDropMachine = (user) =>
+  createMachine({
+    // The initial state should check auth status instead.
+    initial: 'checkingAuth',
+    context: {
+      x: 0,
+      y: 0,
+      dx: 0,
+      dy: 0,
+      px: 0,
+      py: 0,
+      user,
+    },
+    states: {
+      // Add two states:
+      // - checkingAuth (with transient transitions)
+      // - unauthorized
+      checkingAuth: {
+        on: {
+          '': [
+            {
+              cond: isAuthorized,
+              target: 'idle'
+            },
+            {
+              target: 'unauthorized'
+            }
+          ]
+        }
+      },
+      unauthorized: {
+        on: {
+          SIGN_IN: {
+            target: 'checkingAuth',
+            actions: signIn
+          }
+        }
+      },
+      idle: {
+        on: {
+          mousedown: {
+            actions: assignPoint,
+            target: 'dragging',
+          },
+        },
+      },
+      dragging: {
+        on: {
+          mousemove: {
+            actions: assignDelta,
+          },
+          mouseup: {
+            actions: [assignPosition],
+            target: 'idle',
+          },
+          'keyup.escape': {
+            target: 'idle',
+            actions: resetPosition,
+          },
+        },
+      },
+    },
+  });
+
+const service = interpret(createDragDropMachine(null));
 
 service.onTransition((state) => {
   elBox.dataset.state = state.value;
@@ -114,3 +142,12 @@ elBody.addEventListener('keyup', (e) => {
     service.send('keyup.escape');
   }
 });
+
+elButton.addEventListener('click', (e) => {
+  service.send({
+    type: 'SIGN_IN',
+    user: {
+      name: 'Ryan'
+    },
+  });
+})
